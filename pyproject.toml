@@ -1,0 +1,29 @@
+[project]
+name = "apr70-orchestrator"
+version = "0.1.0"
+description = "Multi-tool agent coordinator for APR 70 Pictures v3"
+authors = [{ name = "Marco Caruso", email = "caruso@kimacreative.com" }]
+requires-python = ">=3.12"
+dependencies = [
+  "anthropic>=0.40.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.7.0",
+  "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+  "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestrator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Env
+.env
+.env.local
+
+# Build
+dist/
+build/
+*.tgz
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# OS
+.DS_Store
+
+# State — append-only logs and ephemeral quota state are not committed
+state/USAGE.jsonl
+state/QUOTAS.json
+# TASKS.md and BRIEF.md ARE committed (state lives in git for syncability)
+
+# Editor
+.vscode/
+.idea/
+*.swp

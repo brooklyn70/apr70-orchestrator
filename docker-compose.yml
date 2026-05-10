@@ -1,0 +1,21 @@
+services:
+  orchestrator:
+    image: apr70-orchestrator:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: apr70-orchestrator
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ORCHESTRATOR_STATE_DIR: /state
+      ORCHESTRATOR_WORK_DIR: /work
+    volumes:
+      # State (TASKS.md, BRIEF.md, USAGE.jsonl, QUOTAS.json) — persisted on NAS
+      - ./state:/state
+      # The v3 site checkout that Claude Code subprocess works on
+      # In production this is the real apr70-pictures git checkout on the NAS
+      - /volume1/apps/apr70-pictures:/work
+    # v1: not auto-running. Marco invokes one-shot from tmux when ready.
+    # v2 will set this to a daemon command.
+    command: ["sleep", "infinity"]
