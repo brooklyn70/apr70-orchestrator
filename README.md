@@ -8,7 +8,7 @@ Python daemon that coordinates AI agent work for [APR 70 Pictures v3](https://gi
 
 - **One** runner: Claude Code subprocess.
 - **One** provider: Anthropic API.
-- **One** task type: pick first task from `state/TASKS.md`, execute, log, update `state/BRIEF.md`, stop.
+- **One** task type: pick first task from the site repo `TASKS.md` (under `ORCHESTRATOR_WORK_DIR`), execute, log, update that repo's `BRIEF.md`, stop.
 - **One** USAGE.jsonl entry written end-to-end.
 - **One** quota lookup using anthropic-ratelimit response headers.
 
@@ -24,11 +24,10 @@ apr70-orchestrator/
     runners/           # subprocess wrappers (claude_code.py, cline.py, shell.py)
     tracker.py         # USAGE.jsonl + QUOTAS.json
     config.py          # paths, settings
-  state/               # mounted volume on NAS; readable by orchestrator + agents
-    TASKS.md           # priority-ordered backlog (synced from apr70-pictures repo)
-    BRIEF.md           # current state, hook-updated
-    USAGE.jsonl        # append-only spend log
-    QUOTAS.json        # current quota state per provider, with confidence level
+  state/               # mounted volume on NAS; spend + quota (not TASKS/BRIEF)
+    USAGE.jsonl
+    QUOTAS.json
+  # TASKS.md + BRIEF.md live in the site repo (see ORCHESTRATOR_WORK_DIR).
   scripts/             # ops helpers (start, stop, tail-log, etc.)
   docs/                # design notes
   Dockerfile

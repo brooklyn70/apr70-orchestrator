@@ -1,11 +1,11 @@
 """Orchestrator entry point.
 
 v1 — brutally small loop:
-  1. Read state/TASKS.md, find first unchecked top-task.
-  2. Run Claude Code subprocess in the work_dir with the task as prompt.
-  3. Estimate token usage; append USAGE.jsonl entry.
-  4. Append a one-line note to state/BRIEF.md.
-  5. Mark the task done in TASKS.md, commit/push when GITHUB_TOKEN is set.
+  1. Read TASKS.md in the site work tree (default: work_dir/TASKS.md), first unchecked line.
+  2. Run Claude Code subprocess in work_dir with the task as prompt.
+  3. Estimate token usage; append USAGE.jsonl under state_dir.
+  4. Append a note to BRIEF.md in the site repo (default: work_dir/BRIEF.md).
+  5. Mark the task done in TASKS.md; commit/push when GITHUB_TOKEN is set.
   6. Exit.
 
 Multi-provider routing, fallback logic, GUI dispatch, daemon mode — all v2+.
@@ -83,7 +83,7 @@ def mark_task_done(tasks_md: Path, line_no: int) -> None:
 
 
 def git_push_changes(work_dir: Path, tasks_md: Path, message: str) -> None:
-    """Commit and push changes in both state dir and work dir to GitHub."""
+    """Commit and push each distinct git root (work tree and/or task file repo)."""
     github_token = os.environ.get("GITHUB_TOKEN")
     if not github_token:
         print("[orchestrator] Missing GITHUB_TOKEN, skipping git sync.")
@@ -92,7 +92,12 @@ def git_push_changes(work_dir: Path, tasks_md: Path, message: str) -> None:
     subprocess.run(["git", "config", "--global", "user.email", "orchestrator@apr70.com"], check=False)
     subprocess.run(["git", "config", "--global", "user.name", "APR70 Orchestrator"], check=False)
 
-    for repo_dir in [work_dir, tasks_md.parent]:
+    seen_roots: set[Path] = set()
+    for repo_dir in (work_dir, tasks_md.parent):
+        key = repo_dir.resolve()
+        if key in seen_roots:
+            continue
+        seen_roots.add(key)
         if not (repo_dir / ".git").exists():
             continue
         # Mounted repos (e.g. /work on Synology) are often owned by host UID; Git
@@ -169,7 +174,12 @@ def run_once(*, dry_run: bool = False) -> int:
     mark_task_done(tasks_md, line_no)
     append_brief_note(cfg.brief_path, brief_msg)
     git_push_changes(cfg.work_dir, tasks_md, f"Orchestrator completed: {task_text[:50]}")
-    send_telegram_notification(f"Orchestrator task finished\n\nTask: {task_text}\n\nStatus: {brief_msg}")
+    send_telegram_notification(
+        "Orchestrator run finished\n\n"
+        f"Task: {task_text}\n"
+        f"Exit: {result.returncode}; est ${record.est_cost_usd}\n"
+        f"{cfg.tasks_path} line {line_no} marked done."
+    )
     return result.returncode
 
 
