@@ -75,6 +75,22 @@ Each task still uses **Claude Code** inside the container (`claude --print ...`)
 
 Telegram now includes: working tree snapshot, git push result, Claude stdout tail, **next** TASK line, and routing text derived from the `[cursor+claude]` style tags. Duplicate alerts for the same finished line within a few minutes are suppressed (see `.telegram_last_notify.json` under `state/`).
 
+### Synology: git ownership after Docker (important)
+
+Orchestrator runs **`git`** in the container as **root**. The bind mount `/volume1/apps/apr70-pictures` (`/work`) can pick up **`root`-owned `.git/objects`**, while your DSM login owns the checkout. SSH `git pull`/`fetch` may then fail until ownership is fixed.
+
+```bash
+sudo chown -R caruso:users /volume1/apps/apr70-pictures /volume1/apps/apr70-orchestrator/state
+```
+
+Alternatively run `scripts/chown-mounted-repos-on-nas.sh` from DSM Task Scheduler hourly if you use `--loop`.
+
+**Why not run the container as UID 1026?** Binding `HOME`/`TMPDIR` to `/state` still hit 1Password `op` **`SingleUserEnvironment` ownership failures** against DSM-mounted volumes — so keeping the container as root plus an explicit **`chown` repair step** stays the pragmatic pattern.
+
+### Git credential hygiene
+
+Do **not** embed bare GitHub tokens in persistent `remote.origin.url` strings on NAS or Mac disks; use `gh auth login`, SSH deploy keys, `git credential-helper`, or the orchestrator’s short-lived **`GITHUB_TOKEN` at runtime**.
+
 ## Confidence levels
 
 `QUOTAS.json` carries a `confidence` field per provider:
