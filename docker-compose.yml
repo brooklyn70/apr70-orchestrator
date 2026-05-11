@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: apr70-orchestrator
+    # Match NAS login user (run `id -u` / `id -g` on DSM) so git writes to /work are not root-owned.
+    user: "1026:100"
     restart: unless-stopped
     env_file: .env
     environment:
