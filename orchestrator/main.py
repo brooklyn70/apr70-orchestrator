@@ -100,8 +100,58 @@ def routing_blurb(task_line: str) -> str:
     return f"Suggested: {guide.get(tag, tag)}{extra}"
 
 
+def parse_github_owner_repo(remote_url: str) -> str | None:
+    """Return 'owner/repo' (no .git) for github.com, or None.
+
+    Accepts https://..., git@..., and URLs with embedded credentials.
+    """
+    u = remote_url.strip()
+    if "github.com" not in u:
+        return None
+    if u.startswith("git@"):
+        # git@github.com:org/repo.git
+        try:
+            hostpath = u.split("@", 1)[1]
+            host, _, path = hostpath.partition(":")
+        except IndexError:
+            return None
+        if "github.com" not in host:
+            return None
+        path = path.split()[0].rstrip("/")
+        if path.endswith(".git"):
+            path = path[:-4]
+        return path or None
+    parsed = urllib.parse.urlparse(u)
+    if "github.com" not in (parsed.netloc or ""):
+        return None
+    path = parsed.path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    return path or None
+
+
+def github_ephemeral_https_push_url(owner_repo: str, github_token: str) -> str:
+    """HTTPS URL passed only to `git push` — never persisted in .git/config."""
+    safe_token = urllib.parse.quote(github_token, safe="")
+    return f"https://x-access-token:{safe_token}@github.com/{owner_repo}.git"
+
+
+def current_branch(repo_dir: Path) -> str:
+    proc = subprocess.run(
+        ["git", "-C", str(repo_dir), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    b = proc.stdout.strip()
+    if not b or b == "HEAD":
+        return "main"
+    return b
+
+
 def git_push_changes(work_dir: Path, tasks_md: Path, message: str) -> list[str]:
-    """Commit and push each distinct git root. Return human-readable outcome lines."""
+    """Commit and push each distinct git root. Never writes PAT into stored remote.origin."""
+
     github_token = os.environ.get("GITHUB_TOKEN")
     if not github_token:
         return ["Git: skipped (GITHUB_TOKEN unset). TASKS/BRIEF may be edited on disk only."]
@@ -128,18 +178,32 @@ def git_push_changes(work_dir: Path, tasks_md: Path, message: str) -> list[str]:
                 check=True,
             )
             remote_url = remote_out.stdout.strip()
-            if "github.com" in remote_url and "x-access-token" not in remote_url:
-                new_url = remote_url.replace("https://github.com/", f"https://x-access-token:{github_token}@github.com/")
-                subprocess.run(["git", "-C", str(repo_dir), "remote", "set-url", "origin", new_url], check=True)
 
             subprocess.run(["git", "-C", str(repo_dir), "add", "."], check=True)
-            status = subprocess.run(["git", "-C", str(repo_dir), "status", "--porcelain"], capture_output=True, text=True)
-            if status.stdout.strip():
-                subprocess.run(["git", "-C", str(repo_dir), "commit", "-m", message], check=True)
-                subprocess.run(["git", "-C", str(repo_dir), "push"], check=True)
-                lines_out.append(f"Git: {label} — pushed commit to origin.")
-            else:
+            status = subprocess.run(
+                ["git", "-C", str(repo_dir), "status", "--porcelain"], capture_output=True, text=True
+            )
+            if not status.stdout.strip():
                 lines_out.append(f"Git: {label} — nothing to commit.")
+                continue
+
+            subprocess.run(["git", "-C", str(repo_dir), "commit", "-m", message], check=True)
+
+            owner_repo = parse_github_owner_repo(remote_url)
+            if not owner_repo:
+                lines_out.append(
+                    f"Git: {label} — commit created but push skipped "
+                    "(origin URL is not a recognized github.com remote)."
+                )
+                continue
+
+            push_url = github_ephemeral_https_push_url(owner_repo, github_token)
+            branch = current_branch(repo_dir)
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "push", push_url, f"{branch}:{branch}"],
+                check=True,
+            )
+            lines_out.append(f"Git: {label} — pushed to github.com/{owner_repo} via ephemeral HTTPS (origin unchanged).")
         except Exception as e:
             lines_out.append(f"Git: {label} — FAILED ({e}).")
     return lines_out

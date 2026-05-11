@@ -75,21 +75,72 @@ Each task still uses **Claude Code** inside the container (`claude --print ...`)
 
 Telegram now includes: working tree snapshot, git push result, Claude stdout tail, **next** TASK line, and routing text derived from the `[cursor+claude]` style tags. Duplicate alerts for the same finished line within a few minutes are suppressed (see `.telegram_last_notify.json` under `state/`).
 
-### Synology: git ownership after Docker (important)
+### Canonical Git auth (NAS + orchestrator)
 
-Orchestrator runs **`git`** in the container as **root**. The bind mount `/volume1/apps/apr70-pictures` (`/work`) can pick up **`root`-owned `.git/objects`**, while your DSM login owns the checkout. SSH `git pull`/`fetch` may then fail until ownership is fixed.
+| Actor | Credential | Persisted |
+|-------|-------------|-----------|
+| **You** SSH as `caruso` on DSM | **SSH deploy key** — one keypair **per repo** | `~/.ssh/config` aliases only — **never** PAT in `remote.origin.url` |
+| **Orchestrator** (Docker `/work`) | **`GITHUB_TOKEN` via `op run`** | `GITHUB_TOKEN=op://…` in **`.env`**. Python **`git_push_changes`** does **not** write tokens into `origin`; pushes use ephemeral HTTPS URLs only |
 
-```bash
+**What `op` does:** substitutes secrets at process start (`op run`). **What `op` does not:** prevent someone embedding a PAT in `remote.origin`; strip that independently.
+
+**(A)** After revoking leaked tokens:
+
+```
+cd /volume1/apps/apr70-pictures && git remote set-url origin https://github.com/brooklyn70/apr70-pictures.git
+cd /volume1/apps/apr70-orchestrator && git remote set-url origin https://github.com/brooklyn70/apr70-orchestrator.git
+```
+
+**(B)** Create deploy keys (run on NAS):
+
+```
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_apr70_pictures_deploy -N "" -C "nas-apr70-pictures-deploy"
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_apr70_orchestrator_deploy -N "" -C "nas-apr70-orchestrator-deploy"
+
+grep -q "github-apr70-pictures" ~/.ssh/config || cat >> ~/.ssh/config << 'CFG'
+
+Host github-apr70-pictures
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_apr70_pictures_deploy
+    IdentitiesOnly yes
+
+Host github-apr70-orchestrator
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_apr70_orchestrator_deploy
+    IdentitiesOnly yes
+CFG
+chmod 600 ~/.ssh/config
+```
+
+**(C)** GitHub: each repo **Settings → Deploy keys** → paste each **`.pub`**, enable **Allow write access**.
+
+**(D)** Switch `origin` to SSH (**after deploy keys approve**):
+
+```
+bash /volume1/apps/apr70-orchestrator/scripts/finish-nas-ssh-git-remotes.sh
+```
+
+**(E)** New fine-grained `GITHUB_TOKEN` (both repos, write) → vault in **1Password** → reference in **`apr70-orchestrator/.env`**.
+
+Mac / Cursor: same rule — HTTPS + credential helper or SSH; never PAT-burned **`remote`** strings.
+
+---
+
+### Synology: git ownership after Docker (still required)
+
+Orchestrator **`git`** runs as **root** in-container; **`/work`** collects **`root`-owned `.git/objects`**.
+
+```
 sudo chown -R caruso:users /volume1/apps/apr70-pictures /volume1/apps/apr70-orchestrator/state
 ```
 
-Alternatively run `scripts/chown-mounted-repos-on-nas.sh` from DSM Task Scheduler hourly if you use `--loop`.
+Or schedule **`scripts/chown-mounted-repos-on-nas.sh`**.
 
-**Why not run the container as UID 1026?** Binding `HOME`/`TMPDIR` to `/state` still hit 1Password `op` **`SingleUserEnvironment` ownership failures** against DSM-mounted volumes — so keeping the container as root plus an explicit **`chown` repair step** stays the pragmatic pattern.
-
-### Git credential hygiene
-
-Do **not** embed bare GitHub tokens in persistent `remote.origin.url` strings on NAS or Mac disks; use `gh auth login`, SSH deploy keys, `git credential-helper`, or the orchestrator’s short-lived **`GITHUB_TOKEN` at runtime**.
+**Why not UID 1026 in-container?** 1Password `op` **`SingleUserEnvironment`** checks conflict with DSM bind mounts — keep root container + **`chown` on host**.
 
 ## Confidence levels
 
