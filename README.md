@@ -47,12 +47,33 @@ python -m orchestrator.main --once
 
 ## Running on NAS (production)
 
+The container idles with `sleep infinity` so you trigger work explicitly (or use loop mode below).
+
 ```
 ssh apr70-nas
 cd /volume1/apps/apr70-orchestrator
-sudo docker compose up -d
-sudo docker compose logs -f orchestrator
+export PATH="/usr/local/bin:$PATH"   # docker + git on DSM
+sudo /usr/local/bin/docker compose up -d --build
+sudo /usr/local/bin/docker exec apr70-orchestrator op run -- python -m orchestrator.main --once
 ```
+
+### What "orchestrate" means here
+
+The NAS is already on: the stack is Docker on Synology 24/7. The question is only **when one task runs**. Two options:
+
+1. **Manual trigger** — SSH in and run `--once` whenever you want exactly one backlog line executed.
+2. **Loop mode** — run the engine continuously on the NAS:
+
+```
+sudo /usr/local/bin/docker exec apr70-orchestrator op run -- \\
+  python -m orchestrator.main --loop --loop-interval-sec 900
+```
+
+(`900` = 15 minutes between tasks; adjust or use host `cron` calling `--once` instead.)
+
+Each task still uses **Claude Code** inside the container (`claude --print ...`); `nas-headless` items in `TASKS.md` mean "do not require Marco's Mac / Cursor — the NAS can execute this line autonomously."
+
+Telegram now includes: working tree snapshot, git push result, Claude stdout tail, **next** TASK line, and routing text derived from the `[cursor+claude]` style tags. Duplicate alerts for the same finished line within a few minutes are suppressed (see `.telegram_last_notify.json` under `state/`).
 
 ## Confidence levels
 
