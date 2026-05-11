@@ -12,6 +12,9 @@ services:
     environment:
       ORCHESTRATOR_STATE_DIR: /state
       ORCHESTRATOR_WORK_DIR: /work
+      # Non-root container: op CLI needs a writable home + tmp (no /root or uid-0 /).
+      HOME: /state
+      TMPDIR: /state/tmp
     volumes:
       # Spend log (USAGE.jsonl); TASKS.md + BRIEF.md live in the mounted work repo
       - ./state:/state
