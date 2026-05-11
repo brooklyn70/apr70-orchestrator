@@ -11,7 +11,7 @@ services:
       ORCHESTRATOR_STATE_DIR: /state
       ORCHESTRATOR_WORK_DIR: /work
     volumes:
-      # State (TASKS.md, BRIEF.md, USAGE.jsonl, QUOTAS.json) — persisted on NAS
+      # Spend log (USAGE.jsonl); TASKS.md + BRIEF.md live in the mounted work repo
       - ./state:/state
       # The v3 site checkout that Claude Code subprocess works on
       # In production this is the real apr70-pictures git checkout on the NAS
