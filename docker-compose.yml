@@ -15,6 +15,11 @@ services:
       - ./state:/state
       # The v3 site checkout that Claude Code subprocess works on
       - /volume1/apps/apr70-pictures:/work
+      # Mirror the host path inside the container so `docker compose` invoked
+      # against the host daemon sees identical build-context and volume paths
+      # on both sides (compose CLI reads the build context from inside this
+      # container; the daemon resolves runtime volume paths on the host).
+      - /volume1/apps/apr70-pictures:/volume1/apps/apr70-pictures
       # Docker socket — allows [nas-shell] tasks to run docker commands on the host
       - /var/run/docker.sock:/var/run/docker.sock
     # v1: not auto-running. Marco invokes one-shot from tmux when ready.
