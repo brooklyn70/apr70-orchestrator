@@ -14,8 +14,9 @@ services:
       # Spend log (USAGE.jsonl); TASKS.md + BRIEF.md live in the mounted work repo
       - ./state:/state
       # The v3 site checkout that Claude Code subprocess works on
-      # In production this is the real apr70-pictures git checkout on the NAS
       - /volume1/apps/apr70-pictures:/work
+      # Docker socket — allows [nas-shell] tasks to run docker commands on the host
+      - /var/run/docker.sock:/var/run/docker.sock
     # v1: not auto-running. Marco invokes one-shot from tmux when ready.
     # v2 will set this to a daemon command.
     command: ["sleep", "infinity"]

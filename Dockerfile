@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     unzip \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # 1Password CLI — `op run` injects secrets from op:// references in env
