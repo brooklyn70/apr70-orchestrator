@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Docker CLI — for [nas-shell] tasks that run docker compose / docker exec on host
+# Docker CLI + Compose plugin — for [nas-shell] tasks that run docker compose on host
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg \
        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -21,7 +21,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
        > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce-cli \
+    && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
 # 1Password CLI — `op run` injects secrets from op:// references in env
