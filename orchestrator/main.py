@@ -32,11 +32,13 @@ from pathlib import Path
 
 from .config import load_config
 from .runners.claude_code import run_claude_code
+from .runners.shell import RunResult as ShellResult
+from .runners.shell import is_shell_task, run_shell
 from .tracker import append_usage, make_record
 
 
 TASK_LINE_RE = re.compile(r"^\s*-\s*\[\s*\]\s*(.+?)\s*$")
-TOOL_TAG_RE = re.compile(r"\[((?:cursor\+)?claude|gemini|cline|nas-headless|requires-gui)\]")
+TOOL_TAG_RE = re.compile(r"\[((?:cursor\+)?claude|gemini|cline|nas-headless|nas-shell|requires-gui)\]")
 DEDUPE_FILE = ".telegram_last_notify.json"
 TELEGRAM_DEDUPE_SECONDS = int(os.environ.get("ORCHESTRATOR_TELEGRAM_DEDUPE_SEC", "240"))
 CLIP_SUMMARY = int(os.environ.get("ORCHESTRATOR_TELEGRAM_MAX_LINES", "30"))
@@ -90,6 +92,7 @@ def routing_blurb(task_line: str) -> str:
         "gemini": "Use Gemini-capable tooling — visuals / multimodal QA.",
         "cline": "Cline or scripted CLI edits — mechanical refactors.",
         "nas-headless": "Orchestrator on NAS (--once / --loop) — no GUI; ensure /work repo is cloned and git clean.",
+        "nas-shell": "Orchestrator on NAS — direct shell execution (Docker, git, system ops). SHELL: command embedded in task.",
         "requires-gui": "Marco GUI review — do not assume merge until you visually sign off.",
     }
     extra = ""
@@ -300,31 +303,46 @@ def run_once(*, dry_run: bool = False) -> int:
         print("[orchestrator] --dry-run: not executing.")
         return 0
 
-    result = run_claude_code(
-        prompt=task_text,
-        work_dir=cfg.work_dir,
-        model=cfg.model,
-        timeout_sec=1800,
-    )
-    print(f"[orchestrator] subprocess exited with code={result.returncode}")
+    # ── Route to the right runner ────────────────────────────────────────────
+    tag_match = TOOL_TAG_RE.search(task_text)
+    tag = tag_match.group(1) if tag_match else None
+    use_shell = tag == "nas-shell" or is_shell_task(task_text)
+
+    if use_shell:
+        print(f"[orchestrator] routing to shell runner (tag={tag})")
+        result = run_shell(
+            task_text=task_text,
+            work_dir=cfg.work_dir,
+            timeout_sec=3600,
+        )
+        runner_label = "shell"
+    else:
+        result = run_claude_code(
+            prompt=task_text,
+            work_dir=cfg.work_dir,
+            model=cfg.model,
+            timeout_sec=1800,
+        )
+        runner_label = "claude_code"
+
+    print(f"[orchestrator] {runner_label} exited with code={result.returncode}")
     if result.stderr:
         print(f"[orchestrator] stderr (first 500 chars): {result.stderr[:500]}")
 
     tokens_in = estimate_tokens(task_text)
     tokens_out = estimate_tokens(result.stdout)
     record = make_record(
-        provider="anthropic",
-        model=cfg.model,
+        provider="anthropic" if not use_shell else "none",
+        model=cfg.model if not use_shell else "shell",
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         task_id=f"line-{line_no}",
-        notes="claude_code subprocess (v1 estimated tokens)",
+        notes=f"{runner_label} runner",
     )
     append_usage(cfg.usage_path, record)
     brief_msg = (
-        f"Ran task `{task_text}` via claude_code subprocess. "
-        f"Returncode={result.returncode}; ~{tokens_in}+{tokens_out} tokens "
-        f"(est ${record.est_cost_usd}). USAGE.jsonl appended."
+        f"Ran task `{task_text[:80]}` via {runner_label} runner. "
+        f"Returncode={result.returncode}; USAGE.jsonl appended."
     )
     mark_task_done(tasks_md, line_no)
     append_brief_note(cfg.brief_path, brief_msg)
@@ -353,10 +371,10 @@ def run_once(*, dry_run: bool = False) -> int:
     telegram_body = (
         "Orchestrator run finished.\n\n"
         f"DONE TASK (line {line_no}):\n{task_text}\n\n"
-        f"MODEL: {cfg.model}\n"
-        f"Claude Code exit: {result.returncode}\n"
+        f"RUNNER: {runner_label}\n"
+        f"Exit code: {result.returncode}\n"
         f"Estimated USAGE (rough): ~{tokens_in}+{tokens_out} tokens, est ${record.est_cost_usd}\n\n"
-        f"Working tree snapshot (TASKS check-off + BRIEF note + Claude changes, before push):\n{pre_commit_summary}\n\n"
+        f"Working tree snapshot:\n{pre_commit_summary}\n\n"
         + "\n".join(git_lines)
         + "\n\n"
         f"Stdout tail:\n{clip_stdout_tail(result.stdout)}\n\n"
