@@ -344,7 +344,15 @@ def run_once(*, dry_run: bool = False) -> int:
         f"Ran task `{task_text[:80]}` via {runner_label} runner. "
         f"Returncode={result.returncode}; USAGE.jsonl appended."
     )
-    mark_task_done(tasks_md, line_no)
+
+    # Only mark done and commit if the task actually succeeded.
+    # A failed shell command (exit != 0) must NOT be marked [x] —
+    # it stays open so the next --once will retry it.
+    if result.returncode == 0:
+        mark_task_done(tasks_md, line_no)
+    else:
+        brief_msg += " TASK LEFT OPEN (non-zero exit — fix and re-run)."
+
     append_brief_note(cfg.brief_path, brief_msg)
     pre_commit_summary = worktree_status_summary(cfg.work_dir)
     git_lines = git_push_changes(cfg.work_dir, tasks_md, f"Orchestrator completed: {task_text[:50]}")
