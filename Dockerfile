@@ -10,7 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     unzip \
-    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Docker CLI — for [nas-shell] tasks that run docker compose / docker exec on host
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
+       > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # 1Password CLI — `op run` injects secrets from op:// references in env
