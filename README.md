@@ -82,6 +82,8 @@ Telegram now includes: working tree snapshot, git push result, Claude stdout tai
 | **You** SSH as `caruso` on DSM | **SSH deploy key** — one keypair **per repo** | `~/.ssh/config` aliases only — **never** PAT in `remote.origin.url` |
 | **Orchestrator** (Docker `/work`) | **`GITHUB_TOKEN` via `op run`** | `GITHUB_TOKEN=op://…` in **`.env`**. Python **`git_push_changes`** does **not** write tokens into `origin`; pushes use ephemeral HTTPS URLs only |
 
+After each orchestrator commit, **`git_push_changes`** runs **`git pull --rebase origin <current-branch>`** before **`git push`**, so the NAS work tree rebases onto GitHub when another machine pushed first (avoids a rejected fast-forward-only push).
+
 **What `op` does:** substitutes secrets at process start (`op run`). **What `op` does not:** prevent someone embedding a PAT in `remote.origin`; strip that independently.
 
 **(A)** After revoking leaked tokens:

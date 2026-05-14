@@ -202,6 +202,19 @@ def git_push_changes(work_dir: Path, tasks_md: Path, message: str) -> list[str]:
 
             push_url = github_ephemeral_https_push_url(owner_repo, github_token)
             branch = current_branch(repo_dir)
+            pull = subprocess.run(
+                ["git", "-C", str(repo_dir), "pull", "--rebase", "origin", branch],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if pull.returncode != 0:
+                err_tail = (pull.stderr or pull.stdout or "").strip()[:400]
+                lines_out.append(
+                    f"Git: {label} — pull --rebase origin/{branch} failed before push (push skipped). {err_tail}"
+                )
+                continue
+
             subprocess.run(
                 ["git", "-C", str(repo_dir), "push", push_url, f"{branch}:{branch}"],
                 check=True,
